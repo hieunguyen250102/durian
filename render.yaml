@@ -1,0 +1,15 @@
+# Render Blueprint: realtime game server (Socket.IO).
+services:
+  - type: web
+    name: durian-server
+    runtime: node
+    plan: free
+    buildCommand: npm install --prefix server && npm run build --prefix server
+    startCommand: node server/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Your Vercel URL(s), comma-separated, e.g. https://durian.vercel.app. Leave empty to allow any origin.
+      - key: CLIENT_ORIGIN
+        sync: false
