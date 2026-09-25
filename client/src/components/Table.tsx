@@ -162,12 +162,22 @@ export function Table({
 
   // ---- geometry: seats on an ellipse, you at the bottom, next player (your left) clockwise ----
   const compact = size.w < 700;
-  const cardW = Math.max(74, Math.min(170, size.w * (compact ? 0.2 : 0.15)));
-  const seatH = cardW / 2.35 + 70;
-  const rx = Math.max(0, size.w / 2 - cardW / 2 - 14);
-  const ry = Math.max(0, size.h / 2 - seatH / 2 - 6);
+  // A seat is as tall as the card, plus the part of the stand sticking out under it
+  // (112% wide at 0.648:1, pulled up by 20% of the card width), plus the nameplate.
+  const SEAT_RATIO = 1 / 2.35 + 1.12 * 0.648 - 0.2;
+  const plateH = size.w < 600 ? 24 : 40; // nameplate: the avatar and the score are hidden on phones
+  const MIN_CENTER_H = 170;
+  const EDGE = 18; // room for the seat tag, which floats above the card
+  // `.table-area` clips its overflow, so a seat that does not fit disappears behind the
+  // topbar or the action bar. Cap the card so two seats and the center always fit.
+  const cardFitsH = (size.h - MIN_CENTER_H - 2 * (plateH + EDGE)) / (2 * SEAT_RATIO);
+  const cardW = Math.max(74, Math.min(170, size.w * (compact ? 0.2 : 0.15), cardFitsH));
+  const seatH = cardW * SEAT_RATIO + plateH;
+  // Nameplates are wider than the card, so keep them off the left and right edges too.
+  const rx = Math.max(0, size.w / 2 - cardW / 2 - 30);
+  const ry = Math.max(0, size.h / 2 - seatH / 2 - EDGE);
   const centerW = n === 2 ? Math.min(600, size.w - 24) : Math.min(560, size.w - 2 * (cardW + 16));
-  const centerH = Math.min(380, size.h - 2 * seatH - 4);
+  const centerH = Math.min(380, size.h - 2 * (seatH + EDGE) - 8);
 
   // During the reveal the penalty token waits in the pile until the verdict, then flies to the loser.
   const heldToken = revealing && r && stage < 3 ? r.token : null;
