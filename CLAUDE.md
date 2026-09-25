@@ -41,6 +41,7 @@ npm run images                       # regenerate client/public/assets/*.webp fr
   - Bots stop when no human is connected, and a room with only bots left is deleted.
 - **Seat layout.** Seats sit on an ellipse computed from the measured table size. The viewer is at the bottom, and the next player (the one to "your left") goes clockwise on screen.
 - **Sessions.** The client keeps its session in `sessionStorage`, so each tab counts as a separate player and a refresh keeps the seat. The last-used name is kept in `localStorage`.
+- **Login.** Email-code login comes from the shared `oink-kit` package (github:hieunguyen250102/oink-kit). The server mounts `authHandler` (`POST /auth/request`, `/auth/verify`) and `socketAuth`, and `join` refuses sockets without a login; a `join` without a room code creates a room and needs `canHost` (`HOST_EMAILS`). The seat session above is unchanged: login is only a gate. The client stores the login under `durian.session.v1` in `localStorage` and sends it in the socket handshake. Without a mail provider outside production, the code is printed on the server and returned as `devCode`. In dev, Vite proxies `/auth` to :3210 too.
 - **Deploy config.** `vercel.json` builds the client from the repo root and needs `VITE_SERVER_URL`. `render.yaml` defines the server and uses `CLIENT_ORIGIN` for CORS. When `client/dist` exists, the server also serves it, so a single Render service can run both.
 
 ## Game rules as implemented

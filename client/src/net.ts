@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
+import { createAuthClient, type Session as Account, type SessionUser } from 'oink-kit/client';
 import type { ChatMessage, ClientAction, GameView, JoinResult } from '../../shared/types';
 
 // Set VITE_SERVER_URL when the client and server are deployed separately (Vercel + Render).
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || window.location.origin;
 
-export const socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+/** Email login (shared with the other Oink games); the token rides on every socket handshake. */
+export const authClient = createAuthClient({ storagePrefix: 'durian', serverUrl: SERVER_URL });
+
+export const socket = io(SERVER_URL, { transports: ['websocket', 'polling'], auth: authClient.socketAuth });
+
+/** Reconnect so the server sees the current login token. */
+function reconnect() {
+  socket.disconnect();
+  socket.connect();
+}
 
 // Tracks whether the latest state carries an event that happened while we were watching, so
 // animations play for live moves but not when (re)loading into a room.
@@ -63,6 +73,7 @@ export function useGame() {
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const [rejoining, setRejoining] = useState(() => !!loadSession());
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [account, setAccount] = useState<Account | null>(() => authClient.loadSession());
 
   const notify = useCallback((text: string) => setToast({ id: Date.now(), text }), []);
 
@@ -70,7 +81,8 @@ export function useGame() {
     const rejoin = () => {
       setConnected(true);
       const s = loadSession();
-      if (!s) return setRejoining(false);
+      // Without a login the server refuses the seat; keep it and retry once signed in.
+      if (!s || !authClient.loadSession()) return setRejoining(false);
       socket.emit('join', s, (r: JoinResult) => {
         setRejoining(false);
         if (!r.ok) {
@@ -89,6 +101,20 @@ export function useGame() {
       notify(msg);
     };
     const onChat = (m: ChatMessage) => setChat((c) => [...c.slice(-99), m]);
+    // The server's verdict on our token: drop a stale login, pick up a changed canHost.
+    const onSession = ({ user }: { user: SessionUser | null }) => {
+      const current = authClient.loadSession();
+      if (!current) return;
+      if (!user) {
+        authClient.saveSession(null);
+        setAccount(null);
+      } else if (user.canHost !== current.user.canHost) {
+        const next = { ...current, user };
+        authClient.saveSession(next);
+        setAccount(next);
+      }
+    };
+    socket.on('session', onSession);
     socket.on('connect', rejoin);
     socket.on('disconnect', onDisconnect);
     socket.on('state', setView);
@@ -103,6 +129,7 @@ export function useGame() {
       socket.off('kicked', onKicked);
       socket.off('chatHistory', setChat);
       socket.off('chat', onChat);
+      socket.off('session', onSession);
     };
   }, [notify]);
 
@@ -151,5 +178,17 @@ export function useGame() {
     window.history.replaceState(null, '', url);
   }, []);
 
-  return { connected, view, toast, notify, join, act, leave, rejoining, chat, sendChat };
+  const login = useCallback((s: Account) => {
+    authClient.saveSession(s);
+    setAccount(s);
+    reconnect();
+  }, []);
+
+  const logout = useCallback(() => {
+    authClient.saveSession(null);
+    setAccount(null);
+    reconnect();
+  }, []);
+
+  return { connected, view, toast, notify, join, act, leave, rejoining, chat, sendChat, account, login, logout };
 }

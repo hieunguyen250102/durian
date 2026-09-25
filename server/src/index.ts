@@ -3,20 +3,27 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
+import { authError, authHandler, createAuth, originPolicy, socketAuth, socketUser } from 'oink-kit/server';
 import type { ChatMessage, ClientAction, JoinPayload, JoinResult } from '../../shared/types';
 import { GameError, Room } from './game';
 import { nextBotMove } from './bot';
 
 const PORT = Number(process.env.PORT) || 3210;
-// Comma-separated list of allowed client origins, e.g. "https://durian.vercel.app". Empty = allow all.
-const ORIGINS = (process.env.CLIENT_ORIGIN ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+// Comma-separated list of allowed client origins, e.g. "https://durian.vercel.app"; `*` wildcards work. Empty = allow all.
+const origins = originPolicy(process.env.CLIENT_ORIGIN);
+// Email-code login (shared with the other Oink games). Creating a room needs canHost (HOST_EMAILS).
+const auth = createAuth({ brand: 'Durian', devSecret: 'durian-dev-secret', mailAccent: '#fbf3dc' });
 const LOBBY_GRACE_MS = 20_000;
 const ROOM_IDLE_MS = 30 * 60_000;
 
 const app = express();
+app.set('trust proxy', 1);
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, rooms: rooms.size });
+  // hostRestricted false = HOST_EMAILS unset, so anyone who logs in can open a room
+  res.json({ ok: true, rooms: rooms.size, hostRestricted: auth.hostingIsRestricted(), allowedOrigins: origins.origins });
 });
+// POST /auth/request {email}, POST /auth/verify {email, code, challenge}
+app.use(authHandler(auth, { allowOrigin: origins.allows }));
 
 // When the client has been built next to the server (single-service deploy), serve it too.
 const clientDist = path.resolve(process.env.CLIENT_DIST ?? path.join(__dirname, '../../client/dist'));
@@ -27,7 +34,7 @@ if (existsSync(clientDist)) {
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: ORIGINS.length ? ORIGINS : true },
+  cors: { origin: origins.corsOrigin },
   pingInterval: 10_000,
   pingTimeout: 8_000,
 });
@@ -132,13 +139,20 @@ function deleteRoom(code: string) {
   botTimers.delete(code);
 }
 
+/** Anyone may connect; socket.data.user is set only for a valid login token. */
+io.use(socketAuth(auth));
+
 io.on('connection', (socket: Socket) => {
   const data = socket.data as SocketData;
+  socket.emit('session', { user: socketUser(socket) });
 
   socket.on('join', async (payload: JoinPayload, ack: (r: JoinResult) => void) => {
     try {
-      if (data.roomCode) leaveCurrent(socket, false);
       const code = payload.roomCode?.trim().toUpperCase();
+      // No code means "make me a room", which needs a host account.
+      const denied = authError(socketUser(socket), { host: !code });
+      if (denied) return ack({ ok: false, error: denied });
+      if (data.roomCode) leaveCurrent(socket, false);
       let room = code ? rooms.get(code) : undefined;
       if (code && !room) return ack({ ok: false, error: `Không tìm thấy phòng ${code}.` });
       if (!room) {

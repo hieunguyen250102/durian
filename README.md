@@ -46,6 +46,7 @@ Chủ phòng có thể thêm bot vào các ghế trống trong phòng chờ, và
    - Start: `node server/dist/index.js`
    - Health check: `/health`
 3. Đặt biến môi trường `CLIENT_ORIGIN` bằng URL Vercel, ví dụ `https://durian.vercel.app` (nhiều URL thì ngăn cách bằng dấu phẩy). Để trống nghĩa là cho phép mọi origin.
+4. Đặt các biến cho đăng nhập email (xem mục **Đăng nhập** bên dưới): `SESSION_SECRET`, `MAIL_RELAY_URL`, `MAIL_RELAY_SECRET`, `HOST_EMAILS`.
 
 ### 2. Client lên Vercel
 
@@ -61,6 +62,19 @@ Nếu có `client/dist`, server sẽ tự phục vụ luôn client. Khi đó ch�
 - Start: `node server/dist/index.js`
 
 Không cần đặt `VITE_SERVER_URL`.
+
+### Đăng nhập
+
+Người chơi phải đăng nhập bằng mã gửi qua email trước khi tạo hoặc vào phòng. Phần này dùng package chung [oink-kit](https://github.com/hieunguyen250102/oink-kit), giống các game Oink khác.
+
+| Biến (Render) | Ý nghĩa |
+| --- | --- |
+| `SESSION_SECRET` | Khoá ký phiên đăng nhập. Blueprint tự sinh; đừng đổi, đổi là mọi người bị đăng xuất. |
+| `MAIL_RELAY_URL` | Hàm gửi mail dùng chung, ví dụ `https://oink-mail.vercel.app/api/send-code`. |
+| `MAIL_RELAY_SECRET` | Chuỗi bí mật, giống hệt giá trị đặt ở relay. |
+| `HOST_EMAILS` | Email được tạo phòng, ngăn cách bằng dấu phẩy. Để trống thì ai đăng nhập cũng tạo được. |
+
+Chạy ở máy mà không cấu hình gửi mail thì mã được in ra console của server và hiện luôn trên màn hình để bấm vào. `GET /health` cho biết `hostRestricted` (đã đặt `HOST_EMAILS` chưa) và `allowedOrigins`.
 
 ### Lưu ý
 

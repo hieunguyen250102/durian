@@ -14,7 +14,7 @@ const PRELOAD = [
 ];
 
 export function App() {
-  const { connected, view, toast, join, act, leave, rejoining, chat, sendChat } = useGame();
+  const { connected, view, toast, join, act, leave, rejoining, chat, sendChat, account, login, logout } = useGame();
   const [shownToast, setShownToast] = useState(toast);
 
   useEffect(() => {
@@ -29,7 +29,9 @@ export function App() {
   }, [toast]);
 
   let screen;
-  if (!view) screen = <Home connected={connected} busy={rejoining} onJoin={join} />;
+  if (!view) screen = (
+      <Home connected={connected} busy={rejoining} onJoin={join} account={account} onLogin={login} onLogout={logout} />
+    );
   else if (view.phase === 'lobby') screen = <Lobby view={view} act={act} leave={leave} chat={chat} sendChat={sendChat} />;
   else screen = (
       <Table view={view} act={act} leave={leave} connected={connected} chat={chat} sendChat={sendChat} />
