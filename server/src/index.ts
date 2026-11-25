@@ -139,7 +139,7 @@ function deleteRoom(code: string) {
   botTimers.delete(code);
 }
 
-/** Anyone may connect; socket.data.user is set only for a valid login token. */
+/** Anyone may connect and join; socket.data.user (a valid login) is only needed to create a room. */
 io.use(socketAuth(auth));
 
 io.on('connection', (socket: Socket) => {
@@ -149,8 +149,8 @@ io.on('connection', (socket: Socket) => {
   socket.on('join', async (payload: JoinPayload, ack: (r: JoinResult) => void) => {
     try {
       const code = payload.roomCode?.trim().toUpperCase();
-      // No code means "make me a room", which needs a host account.
-      const denied = authError(socketUser(socket), { host: !code });
+      // No code means "make me a room", which needs a host account. Joining needs no login.
+      const denied = code ? undefined : authError(socketUser(socket), { host: true });
       if (denied) return ack({ ok: false, error: denied });
       if (data.roomCode) leaveCurrent(socket, false);
       let room = code ? rooms.get(code) : undefined;

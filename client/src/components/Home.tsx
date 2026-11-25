@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useEmailLogin } from 'oink-kit/react';
-import type { Session as Account } from 'oink-kit/client';
+import { roomCodeInput, type Session as Account } from 'oink-kit/client';
 import { authClient, savedName } from '../net';
 import { FRUIT_META } from '../meta';
 import { FRUITS } from '../../../shared/types';
@@ -25,6 +25,9 @@ export function Home({
   const [name, setName] = useState(savedName);
   const [code, setCode] = useState(() => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '');
   const [pending, setPending] = useState(false);
+  // Only the host logs in. Also reopened when the mail app reloaded the tab mid-login.
+  const [hostLogin, setHostLogin] = useState(() => !!authClient.loadPendingLogin());
+  const canHost = !!account?.user.canHost;
   const disabled = !connected || busy || pending || !name.trim();
 
   const submit = async (roomCode?: string) => {
@@ -66,16 +69,26 @@ export function Home({
           <p>Cửa hàng trái cây của quản lý khó tính</p>
         </div>
 
-        {account ? (
+        {hostLogin && !account ? (
+          <LoginForm
+            onLogin={onLogin}
+            onCancel={() => {
+              authClient.savePendingLogin(null);
+              setHostLogin(false);
+            }}
+          />
+        ) : (
           <>
-            <div className="account">
-              <span>
-                <span className="dot">●</span> {account.user.email}
-              </span>
-              <button type="button" className="link" onClick={onLogout}>
-                Đăng xuất
-              </button>
-            </div>
+            {account && (
+              <div className="account">
+                <span>
+                  <span className="dot">●</span> {account.user.email}
+                </span>
+                <button type="button" className="link" onClick={onLogout}>
+                  Đăng xuất
+                </button>
+              </div>
+            )}
 
             <label className="field">
               <span>Tên của bạn</span>
@@ -88,7 +101,7 @@ export function Home({
               />
             </label>
 
-            {account.user.canHost ? (
+            {canHost ? (
               <>
                 <button className="btn primary big" disabled={disabled} onClick={() => submit()}>
                   🏪 Tạo phòng mới
@@ -96,7 +109,7 @@ export function Home({
                 <div className="or">hoặc vào phòng có sẵn</div>
               </>
             ) : (
-              <p className="hint">Tài khoản này vào được phòng có sẵn, không tạo phòng mới được.</p>
+              <p className="hint">Nhập mã phòng mà chủ phòng gửi cho bạn để vào chơi.</p>
             )}
             <div className="join-row">
               <input
@@ -104,16 +117,25 @@ export function Home({
                 value={code}
                 maxLength={4}
                 placeholder="MÃ"
-                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                // roomCodeInput undoes Vietnamese Telex rewrites, e.g. a lone "w" turning into "ư"
+                onChange={(e) => setCode(roomCodeInput(e.target.value, code, 4, e.target.selectionStart))}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="characters"
+                spellCheck={false}
                 onKeyDown={(e) => e.key === 'Enter' && !disabled && code.length === 4 && submit(code)}
               />
               <button className="btn secondary" disabled={disabled || code.length !== 4} onClick={() => submit(code)}>
                 Vào phòng
               </button>
             </div>
+
+            {!account && (
+              <button type="button" className="link" style={{ fontSize: '0.9rem' }} onClick={() => setHostLogin(true)}>
+                Bạn là chủ phòng? Đăng nhập để tạo phòng
+              </button>
+            )}
           </>
-        ) : (
-          <LoginForm onLogin={onLogin} />
         )}
 
         {!connected && (
@@ -131,7 +153,7 @@ export function Home({
 }
 
 /** Email → 6-digit code. The behaviour lives in oink-kit's useEmailLogin; this is only Durian's look. */
-function LoginForm({ onLogin }: { onLogin: (account: Account) => void }) {
+function LoginForm({ onLogin, onCancel }: { onLogin: (account: Account) => void; onCancel: () => void }) {
   const login = useEmailLogin(authClient, { onLogin });
   const { email, code, busy, error, notice, devCode, cooldown } = login;
 
@@ -144,7 +166,7 @@ function LoginForm({ onLogin }: { onLogin: (account: Account) => void }) {
           void login.send();
         }}
       >
-        <p className="hint">Đăng nhập bằng email: mình sẽ gửi cho bạn một mã 6 số.</p>
+        <p className="hint">Chỉ chủ phòng cần đăng nhập để tạo phòng. Nhập email, mình sẽ gửi cho bạn một mã 6 số.</p>
         <label className="field">
           <span>Email</span>
           <input
@@ -160,6 +182,9 @@ function LoginForm({ onLogin }: { onLogin: (account: Account) => void }) {
         {error && <p className="login-error">{error}</p>}
         <button type="submit" className="btn primary big" disabled={!login.emailOk || busy}>
           {busy ? 'Đang gửi…' : '✉️ Gửi mã đăng nhập'}
+        </button>
+        <button type="button" className="link" style={{ fontSize: '0.9rem' }} onClick={onCancel}>
+          ← Quay lại, tôi chỉ vào phòng
         </button>
       </form>
     );

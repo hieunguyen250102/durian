@@ -65,7 +65,7 @@ Không cần đặt `VITE_SERVER_URL`.
 
 ### Đăng nhập
 
-Người chơi phải đăng nhập bằng mã gửi qua email trước khi tạo hoặc vào phòng. Phần này dùng package chung [oink-kit](https://github.com/hieunguyen250102/oink-kit), giống các game Oink khác.
+Chỉ chủ phòng cần đăng nhập (mã gửi qua email, email phải nằm trong `HOST_EMAILS`) để tạo phòng; người chơi khác chỉ nhập tên và mã phòng là vào được. Phần này dùng package chung [oink-kit](https://github.com/hieunguyen250102/oink-kit), giống các game Oink khác.
 
 | Biến (Render) | Ý nghĩa |
 | --- | --- |

@@ -81,8 +81,7 @@ export function useGame() {
     const rejoin = () => {
       setConnected(true);
       const s = loadSession();
-      // Without a login the server refuses the seat; keep it and retry once signed in.
-      if (!s || !authClient.loadSession()) return setRejoining(false);
+      if (!s) return setRejoining(false);
       socket.emit('join', s, (r: JoinResult) => {
         setRejoining(false);
         if (!r.ok) {
